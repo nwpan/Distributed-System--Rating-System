@@ -41,7 +41,7 @@ class HTTPOutput():
     def flush(self):
         pass
 
-parser = argparse.ArgumentParser(description='Process.')
+parser = argparse.ArgumentParser(description='Run single test or test suite.')
 
 parser.add_argument('--key',
                     dest='key',
@@ -60,13 +60,13 @@ parser.add_argument('--results',
 
 parser.add_argument('--leavedb',
                     action='store_true',
-                    help='leave the database after termination')
+                    help='leave the Redis servers running after termination')
 
 parser.add_argument('--test',
                     dest='test',
                     action='store',
                     nargs='?',
-                    default='simple',
+                    default=None,
                     help='name of single test to run')
 
 parser.add_argument('--ndb',
@@ -74,8 +74,17 @@ parser.add_argument('--ndb',
                     type=int,
                     action='store',
                     nargs='?',
-                    default=None,
-                    help='number of database nodes to spin up')
+                    default=4,
+                    help='number of database nodes to spin up; default %(default)s')
+
+parser.add_argument('--wait',
+                    dest='wait',
+                    type=int,
+                    action='store',
+                    nargs='?',
+                    default=1,
+                    help=('number of seconds to wait for servers to start; '
+                          'occurs at start of every test; default %(default)s'))
 
 args = parser.parse_args()
 if args.output:
@@ -92,10 +101,7 @@ random.seed(args.key)
 
 ITEM = 'zoo'
 
-if args.ndb:
-    ndb = args.ndb
-else:
-    ndb = 4 # Number of database nodes
+ndb = args.ndb # Number of database nodes
 nlb = 1 # Number of load balancers
 nq = 1 # Number of queue servers
 digest_length = 2 # Number of PUTs in each digest
@@ -144,7 +150,7 @@ db_configs = [ {'id': i,
                 'qport': qs_base,
                 'digest-length': digest_length}
                 for i in range(ndb)]
-db_servers = [ subprocess.Popen(['python', os.path.join(base, 'serverDB.py'), json.dumps(config)]) for config in db_configs ]
+db_servers = []
 
 def endpoint(id, lb_port):
     return 'http://localhost:'+str(lb_port)+'/rating/'+id
@@ -161,13 +167,15 @@ def get(id, ec=False, port=lb_base):
     url = endpoint(id, port)
     try:
         if ec:
-            request = requests.get(url, headers=headers, params={'consistency': 'weak'})
-            data = request.json()
+            response = requests.get(url, headers=headers, params={'consistency': 'weak'})
         else:
-            request = requests.get(url, headers=headers)
-            data = request.json()
+            response = requests.get(url, headers=headers)
+    except Exception as e:
+        raise Exception("Invalid request: url %s, exception %s" % (url, e))
+    try:
+        data = response.json()
     except:
-        raise Exception('Invalid request: %s HTTP %d  %s' % (url, request.status_code, request.text))
+        raise Exception('Unexpected response: %s HTTP %d  %s' % (url, response.status_code, response.text))
 
     try:
         rating = float(data['rating'])
@@ -208,6 +216,26 @@ def flush():
     for client in clients:
         client.flushall()
 
+def restartDBServers():
+    stopDBServers()
+    if len(db_servers) > 0: # Only drain queue if a test has been run
+        res = requests.delete('http://localhost:'+str(qs_base)+'/clear')
+    startDBServers()
+
+def startDBServers():
+    global db_servers
+    db_servers = [ subprocess.Popen(['python',
+                                     os.path.join(base, 'serverDB.py'),
+                                     json.dumps(config)])
+                                     for config in db_configs ]
+    # Give the server some time to start up
+    time.sleep(args.wait)
+
+
+def stopDBServers():
+    if len(db_servers) > 0:
+        for db_server in db_servers: db_server.terminate()
+
 def count():
     return sum(map(lambda c:c.info()['total_commands_processed'],clients))
 
@@ -236,9 +264,6 @@ print("Running test #"+args.key)
 result({ 'name': 'info', 'type': 'KEY', 'value': args.key })
 result({ 'name': 'info', 'type': 'SHARD_COUNT', 'value': ndb })
 
-# Give the server some time to start up
-time.sleep(1)
-
 tests = [ ]
 def test():
     def wrapper(f):
@@ -251,6 +276,7 @@ def test():
             info("Running test %s" % (f.__name__))
             # Clean the database before subsequent tests
             flush()
+            restartDBServers()
             # Reset the RNG to a known value
             random.seed(args.key+'/'+f.__name__)
             f(rx, *a)
@@ -288,32 +314,35 @@ def testGetGossip(result):
     else:
         result({'type': 'KEY_NOT_SAVED'})
         return
-    baseclient = db_base+i
-    basesub = baseclient + (i+1)%ndb
+    db_pub_client = db_base+i
+    db_sub_client = db_base + (i+1)%ndb
 
     for i in range(1,digest_length+1):
         item = base + str(i)
-        put(item, 1, cv, baseclient)
+        put(item, 1, cv, db_pub_client)
 
-    result({'type': 'str', 'expected': 'False', 'got': str(clients[1].exists(base+'*'))})
+    result({'type': 'str', 'expected': 'False', 'got': str(clients[db_sub_client-db_base].exists(base+'*'))})
 
-    rating, _, _ = get('hello', port=basesub)
+    rating, _, _ = get('hello', port=db_sub_client)
     result({'type': 'float', 'expected': 0.0, 'got': rating})
 
-    rating, choices, clocks = get(base+'0', port=basesub)
+    rating, choices, clocks = get(base+'0', port=db_sub_client)
     result({'type': 'float', 'expected': 1.0, 'got': rating})
     result({'type': 'EXPECT_CHOICES', 'expected': [1.0], 'got': choices})
     result({'type': 'EXPECT_CLOCKS', 'expected': [cv.asDict()], 'got': [c.asDict() for c in clocks]})
 
 # Go through all the tests and run them
 try:
+    # Start our servers
+    #startDBServers()
+
     for test in tests:
         if args.test == None or args.test == test.__name__:
             test()
 finally:
     # Shut. down. everything.
     for lb_server in lb_servers: lb_server.terminate()
-    for db_server in db_servers: db_server.terminate()
+    stopDBServers()
     for qs_server in qs_servers: qs_server.terminate()
     if not args.leavedb:
         for p in rd_processes: p.terminate()
