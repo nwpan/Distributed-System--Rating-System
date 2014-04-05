@@ -6,6 +6,7 @@ import sys
 import time
 import math
 import json
+import pdb
 
 # Libraries that have to have been installed by pip
 import redis
@@ -35,9 +36,50 @@ if (len(sys.argv) > 1):
 qport = config['qport']
 queue = Queue(qport)
 id = config['id']
+digest_list = []
+
+current_channel = 'db'+id
+neighbour_channel = 'db'+((id+1)%ndb)
+db_id_key = 'db_id'
 
 # Connect to a single Redis instance
 client = redis.StrictRedis(host=config['servers'][0]['host'], port=config['servers'][0]['port'], db=0)
+
+def merge_clock(ratings, clocks):
+    # merge stuff here
+    return None
+
+def merge_with_db(setrating, setclock, key):
+    # fix this
+    teaHash = merge_clock({setclock:setrating}, client.hgetall(key))
+
+    db_instance = current_channel
+
+    # Save the merged values into the Redis database.
+    client.hmset(key, teaHash)
+
+    # get rating choices clocks here
+    digest_list.append(db_instance, key, rating, choices, clocks)
+
+    if len(digest_list) >= config['digest-length']:
+        for row in digest_list:
+            queue.put(current_channel, row)
+    else:
+        return False
+    return True
+
+# checks the our channel for any messages then sync with it, also
+# update the digest_list 
+def sync_with_neighbor_queue():
+
+    for primary_id, rating, choices, clocks in queue.get(neighbour_channel):
+        # queue.dequeue(channel), using the nonexistent dequeue method
+        if current_channel != primary_id:
+            merged_results = merge_clock({rating, choices, clocks}, {})
+            client.hmset(key, merged_results) # this is broken
+            merged_results[db_id_key] = primary_id
+            digest_list.append(merged_results)
+
 
 # A user updating their rating of something which can be accessed as:
 # curl -XPUT -H'Content-type: application/json' -d'{ "rating": 5, "choices": [3, 4], "clocks": [{ "c1" : 5, "c2" : 3 }] }' http://localhost:3000/rating/bob
@@ -61,9 +103,9 @@ def put_rating(entity):
 
     key = '/rating/'+entity
 
-    # YOUR CODE HERE
-    # MERGE WITH CURRENT VALUES FOR THIS KEY
-    # REPLACE FOLLOWING WITH CORRECT FINAL RATING
+    merge_with_db(setrating, setclock, key)
+    sync_with_neighbor_queue()
+
     finalrating = 0.0
     # SAVE NEW VALUES
 
@@ -89,6 +131,7 @@ def get_rating(entity):
     # GOSSIP
     # GET THE VALUE FROM THE DATABASE
     # RETURN IT, REPLACING FOLLOWING
+    sync_with_neighbor_queue()
     
     return {
         'rating': 0.0,

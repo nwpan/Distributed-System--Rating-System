@@ -8,6 +8,9 @@ import math
 import json
 import random
 import string
+import pdb
+import hashlib
+from urlparse import parse_qs, urlparse
 
 # Libraries that have to have been installed by pip
 import requests
@@ -28,6 +31,10 @@ port = config['port']
 ndb = config['ndb']
 dbBasePort = config['db-base-port']
 
+# get_shard_number(entity, ndb)
+# Takes in an entity and ndb, returns the server number.
+def get_shard_number(entity, ndb):
+    return int(hashlib.sha1(entity).hexdigest(), 16) % ndb
 
 # Update the rating of entity
 # This can be accessed using;
@@ -50,18 +57,22 @@ def put_rating(entity):
     data = json.load(request.body)
     rating = data.get('rating')
     clock = VectorClock.fromDict(data.get('clock'))
-
+    query_param_dict = parse_qs(urlparse(request.url).query, keep_blank_values=True)
+    pdb.set_trace()
     # Basic sanity checks on the rating
     if isinstance(rating, int): rating = float(rating)
     if not isinstance(rating, float): return abort(400)
 
-    # YOUR CODE HERE
-    # HASH THE ENTITY TO DETERMINE ITS SHARD
-    # PUT THE PORT FOR THE CORRECT SHARD IN url below
+    shard_number = None
+    if (query_param_dict['consistency'] == 'weak'):
+        shard_number = random.randint(3000, 3000+ndb-1)
+    else:
+        shard_number = 3000+get_shard_number(entity, ndb)
+
+    dbBasePort = shard_number
+
     url = 'http://localhost:'+str(dbBasePort)+'/rating/'+entity
 
-    # RESUME BOILERPLATE CODE...
-    # Update the rating
     res = requests.put(url,
                        data=json.dumps({'rating': rating,
                                         'clock': clock.asDict()}),
