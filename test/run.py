@@ -77,6 +77,14 @@ parser.add_argument('--ndb',
                     default=None,
                     help='number of database nodes to spin up')
 
+parser.add_argument('--wait',
+                    dest='wait',
+                    type=int,
+                    action='store',
+                    nargs='?',
+                    default=1,
+                    help='number of seconds to wait for servers to start')
+
 args = parser.parse_args()
 if args.output:
     url = urlparse.urlparse(args.output)
@@ -161,13 +169,15 @@ def get(id, ec=False, port=lb_base):
     url = endpoint(id, port)
     try:
         if ec:
-            request = requests.get(url, headers=headers, params={'consistency': 'weak'})
-            data = request.json()
+            response = requests.get(url, headers=headers, params={'consistency': 'weak'})
         else:
-            request = requests.get(url, headers=headers)
-            data = request.json()
+            response = requests.get(url, headers=headers)
+    except Exception as e:
+        raise Exception("Invalid request: url %s, exception %s" % (url, e))
+    try:
+        data = response.json()
     except:
-        raise Exception('Invalid request: %s HTTP %d  %s' % (url, request.status_code, request.text))
+        raise Exception('Unexpected response: %s HTTP %d  %s' % (url, response.status_code, response.text))
 
     try:
         rating = float(data['rating'])
@@ -289,7 +299,7 @@ def testGetGossip(result):
         result({'type': 'KEY_NOT_SAVED'})
         return
     baseclient = db_base+i
-    basesub = baseclient + (i+1)%ndb
+    basesub = db_base + (i+1)%ndb
 
     for i in range(1,digest_length+1):
         item = base + str(i)
