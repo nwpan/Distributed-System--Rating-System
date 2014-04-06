@@ -45,9 +45,93 @@ db_id_key = 'db_id'
 # Connect to a single Redis instance
 client = redis.StrictRedis(host=config['servers'][0]['host'], port=config['servers'][0]['port'], db=0)
 
-def merge_clock(ratings, clocks):
-    # Coalesce method... here?
-    return None
+# gets the average of tea-x.  key = '/rating/tea-x'
+def average(key):
+	teaHash = client.hgetall(key)
+	sum = 0
+	for clockJson, rating in teaHash.iteritems():
+		sum = sum + rating
+	if sum == 0: return None
+	return sum/len(teaHash)	
+
+# Figure out what to do given the clock vectors and then merge it
+# 3 cases: new, incomparable, and stale
+def coalesce(v1_cached, v2_input):
+
+        # check to make sure it the arguments are VectorClock objects
+        error_msg = 'Must be a VectorClock object'
+        if not isinstance(v1_cached, VectorClock):
+                print(error_msg)
+                return abort(400)
+        if not isinstance(v2_input, VectorClock):
+                print(error_msg)
+                return abort(400)
+
+        # new input is most recent so lets return that one
+        if v1_cached < v2_input:
+                return [v2_input]
+
+        # Incomparable data, let us return both
+        if (v1_cached < v2_input) == False and (v1_cached > v2_input) == False:
+                return [v1_cached, v2_input]
+
+        # Well then...the new one is older so return the cached
+        return [v1_cached]
+
+# merge one pair of (clock, raiting)  
+def merge_clock(rating, clock, key):
+	
+	# make sure the clock is a VectorClock object first
+	if not isinstance(clock, VectorClock) and isinstance(clock, dict):
+		clock = VectorClock.fromDict(clock)
+	clockDict = clock.asDict()
+	
+	# lets get the hash from redis for this tea-x
+	teaHash = client.hgetall(key)
+
+	#flag so we know whether to just add the new rating or not
+	isClientExist = False
+
+	for clockJsonString, redisRating in teaHash.iteritems():
+		redisClockDict = json.loads(clockJsonString)
+		redisClock = VectorClock.fromDict(redisClockDict)
+	
+		# Check if the clock is inside the redis
+		if clock >= redisClock or clock < redisClock:
+			isClientExist = True # well, looks like we won't be creating a new one
+
+			# returns either [redisclock], [clock], or [redisClock, clock]
+			# which means stale, recent, incomparable respectively
+			vcl = coalesce(redisClock, clock)
+		
+			# lets cache the comparisons
+			redisClockIncluded = redisClock in vcl
+			clockIncluded = clock in vcl
+
+			# the incomparable case, include both!
+			if redisClockIncluded and clockIncluded:
+				# The redis (clock,rating) is already added so we just add
+				# the new one to redis
+				client.hset(key, json.dumps(clockDict), rating)
+				
+				# check if we can delete the old clock if a client in the  new clock 
+				# is newer than an old client's clock time.
+				for client, clockTime in redisClock: # iterate through each client
+					if redisClockDict[client] < clockTime:
+						client.hdel(key, json.dumps(redisClockDict))
+		
+			
+			# the more recent case, replace the old one with the new one
+			if not redisClockIncluded and clockIncluded:
+				client.hdel(key, json.dumps(redisClockDict))
+				client.hset(key, json.dumps(clockDict), rating)
+
+	# Client never rated yet since we didn't find it in the hash so add it
+	if isClientExist == False:
+		client.hset(key, json.dumps(clockDict), rating)
+	
+	# still needs to return result as {rating, choices, clock}
+	return None 
 
 def merge_with_db(setrating, setclock, key):
     # fix this
