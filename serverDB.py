@@ -52,7 +52,29 @@ def average(key):
 	for clockJson, rating in teaHash.iteritems():
 		sum = sum + rating
 	if sum == 0: return None
-	return sum/len(teaHash)	
+	average = sum/len(teaHash)
+	return average
+
+# returns result in the form of {rating, choices, clock}
+def final_rating_result(key):
+	teaHash = client.hgetall(key)
+	sum = 0
+	choices = []
+	clocks = []
+	
+	for clockJsonString, rating in teaHash.iteritems():
+		rating = float(rating)
+		sum = sum + rating
+		choices.append(rating)
+		clocks.append(json.loads(clockJsonString))
+	if sum == 0: average = 0 # or should it be none
+	else: average = sum/len(teaHash)
+	
+	return {
+		"rating" : average,
+		"choices" : json.dumps(choices),
+		"clocks" : json.dumps(clocks)
+	}
 
 # Figure out what to do given the clock vectors and then merge it
 # 3 cases: new, incomparable, and stale
@@ -130,8 +152,14 @@ def merge_clock(rating, clock, key):
 	if isClientExist == False:
 		client.hset(key, json.dumps(clockDict), rating)
 	
-	# still needs to return result as {rating, choices, clock}
-	return None 
+	# calls method that returns the result as {rating, choices, clock}
+	final_rating_result = final_rating_result(key) 
+	
+	# save the final rating average
+	key = '/final_ratings/' + entity
+	client.set(key, final_rating_result['rating'])
+ 
+	return final_rating_result 
 
 def merge_with_db(setrating, setclock, key):
     # fix this
