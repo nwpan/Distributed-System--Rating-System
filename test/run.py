@@ -314,19 +314,19 @@ def testGetGossip(result):
     else:
         result({'type': 'KEY_NOT_SAVED'})
         return
-    baseclient = db_base+i
-    basesub = db_base + (i+1)%ndb
+    db_pub_client = db_base+i
+    db_sub_client = db_base + (i+1)%ndb
 
     for i in range(1,digest_length+1):
         item = base + str(i)
-        put(item, 1, cv, baseclient)
+        put(item, 1, cv, db_pub_client)
 
-    result({'type': 'str', 'expected': 'False', 'got': str(clients[1].exists(base+'*'))})
+    result({'type': 'str', 'expected': 'False', 'got': str(clients[db_sub_client-db_base].exists(base+'*'))})
 
-    rating, _, _ = get('hello', port=basesub)
+    rating, _, _ = get('hello', port=db_sub_client)
     result({'type': 'float', 'expected': 0.0, 'got': rating})
 
-    rating, choices, clocks = get(base+'0', port=basesub)
+    rating, choices, clocks = get(base+'0', port=db_sub_client)
     result({'type': 'float', 'expected': 1.0, 'got': rating})
     result({'type': 'EXPECT_CHOICES', 'expected': [1.0], 'got': choices})
     result({'type': 'EXPECT_CLOCKS', 'expected': [cv.asDict()], 'got': [c.asDict() for c in clocks]})
