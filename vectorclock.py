@@ -10,6 +10,7 @@
 '''
 
 import copy
+import pdb
 
 # PART coreclass
 class VectorClock(object):
