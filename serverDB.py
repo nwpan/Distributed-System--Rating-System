@@ -59,6 +59,7 @@ def put_rating(entity):
     data = json.load(request.body)
     setrating = data.get('rating')
     setclock = VectorClock.fromDict(data.get('clock'))
+    setshard = int(data.get('shard')_
 
     key = '/rating/'+entity
 

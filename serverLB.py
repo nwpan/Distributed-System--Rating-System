@@ -9,6 +9,7 @@ import json
 import random
 import string
 import pdb
+import hashlib
 
 # Libraries that have to have been installed by pip
 import requests
@@ -29,10 +30,10 @@ port = config['port']
 ndb = config['ndb']
 dbBasePort = config['db-base-port']
 
-# get_shard_number(entity, port)
-# Takes in an entity and port, returns the server number.
-def get_shard_number(entity, port):
-    return int(hashlib.sha1(entity).hexdigest(), 16) % port
+# get_shard_number(entity, ndb)
+# Takes in an entity and ndb, returns the server number.
+def get_shard_number(entity, ndb):
+    return int(hashlib.sha1(entity).hexdigest(), 16) % ndb
 
 # Update the rating of entity
 # This can be accessed using;
@@ -60,14 +61,16 @@ def put_rating(entity):
     if isinstance(rating, int): rating = float(rating)
     if not isinstance(rating, float): return abort(400)
 
-    server_number = get_shard_number(entity, dbBasePort)
-    url = 'http://localhost:'+str(config[server_number]['db-base-port'])+'/rating/'+entity
+    shard_number = get_shard_number(entity, ndb)
+
+    url = 'http://localhost:'+str(dbBasePort)+'/rating/'+entity
 
     # RESUME BOILERPLATE CODE...
     # Update the rating
     res = requests.put(url,
                        data=json.dumps({'rating': rating,
-                                        'clock': clock.asDict()}),
+                                        'clock': clock.asDict(),
+                                        'shard': shard_number}),
                        headers={'content-type': 'application/json'})
 
     # Return the new rating for the entity
