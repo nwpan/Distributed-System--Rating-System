@@ -28,6 +28,10 @@ port = config['port']
 ndb = config['ndb']
 dbBasePort = config['db-base-port']
 
+# get_shard_number(entity, port)
+# Takes in an entity and port, returns the server number.
+def get_shard_number(entity, port):
+    return int(hashlib.sha1(entity).hexdigest(), 16) % port
 
 # Update the rating of entity
 # This can be accessed using;
@@ -55,10 +59,8 @@ def put_rating(entity):
     if isinstance(rating, int): rating = float(rating)
     if not isinstance(rating, float): return abort(400)
 
-    # YOUR CODE HERE
-    # HASH THE ENTITY TO DETERMINE ITS SHARD
-    # PUT THE PORT FOR THE CORRECT SHARD IN url below
-    url = 'http://localhost:'+str(dbBasePort)+'/rating/'+entity
+    server_number = get_shard_number(entity, dbBasePort)
+    url = 'http://localhost:'+str(config[server_number]['db-base-port'])+'/rating/'+entity
 
     # RESUME BOILERPLATE CODE...
     # Update the rating
