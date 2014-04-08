@@ -61,6 +61,8 @@ def final_rating_result(key):
 	choices = []
 	clocks = []
 	
+	# calculate the average, create the choices list, and 
+	# create the clocks list AT THE SAME TIME!! Sick. Bro.	
 	for clockJsonString, rating in teaHash.iteritems():
 		rating = float(rating)
 		sum = sum + rating
