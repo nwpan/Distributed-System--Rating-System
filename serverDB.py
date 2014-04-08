@@ -71,8 +71,8 @@ def final_rating_result(key):
 	
 	return {
 		"rating" : average,
-		"choices" : json.dumps(choices),
-		"clocks" : json.dumps(clocks)
+		"choices" : choices, #json.dumps(choices),
+		"clocks" : clocks #json.dumps(clocks)
 	}
 
 # Figure out what to do given the clock vectors and then merge it
@@ -161,16 +161,18 @@ def merge_clock(rating, clock, key):
 	return final_rating_result 
 
 def merge_with_db(setrating, setclock, key):
-    # fix this
-    teaHash = merge_clock({setclock:setrating}, client.hgetall(key))
+
+    # in a form of {rating, choices, clock}
+    final_rating_result = merge_clock(setrating, setclock, key)
 
     db_instance = current_channel
 
-    # Save the merged values into the Redis database.
-    client.hmset(key, teaHash)
-
-    # get rating choices clocks here
-    digest_list.append(db_instance, key, rating, choices, clocks)
+    # Using the results from the merge_clock, fill up our digest-list
+    digest_list.append(db_instance, 
+	key, 
+	final_rating_result['rating'], 
+	final_rating_result['choices'], 
+	final_rating_result['clocks'])
 
     if len(digest_list) >= config['digest-length']:
         for row in digest_list:
