@@ -183,16 +183,16 @@ def merge_with_db(setrating, setclock, key):
 
 # checks the our channel for any messages then sync with it, also
 # update the digest_list 
-def sync_with_neighbour_queue():
+def sync_with_neighbour_queue(key):
     for queue_resp in queue.get(neighbour_channel):
         # According to Ted & Izaak, queue.get(neighbour_channel) automatically
         # dequeues the item from queue once called. Note that this issue has been,
         # raised multiple times, as noted by Izaak but he said to verify first.
         # If does not queue, I suggest implementing a mock queue.dequeue(channel)
-        # method. 
+        # method. merge_clock({setclock:setrating}, client.hgetall(key))
         for primary_id, rating, choices, clocks in queue_resp.items()
             if current_channel != primary_id:
-                merged_results = merge_clock({rating, choices, clocks}, {})
+                merged_results = merge_clock({clocks:rating}, client.hgetall(key))
                 client.hmset(key, merged_results) # this is broken
                 merged_results[db_id_key] = primary_id
                 digest_list.append(merged_results)
@@ -221,7 +221,7 @@ def put_rating(entity):
     key = '/rating/'+entity
 
     merge_with_db(setrating, setclock, key)
-    sync_with_neighbour_queue()
+    sync_with_neighbour_queue(key)
 
     finalrating = 0.0
     # SAVE NEW VALUES
@@ -248,7 +248,7 @@ def get_rating(entity):
     # GOSSIP
     # GET THE VALUE FROM THE DATABASE
     # RETURN IT, REPLACING FOLLOWING
-    sync_with_neighbour_queue()
+    sync_with_neighbour_queue(key)
     
     return {
         'rating': 0.0,
