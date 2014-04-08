@@ -108,7 +108,17 @@ def get_rating(entity):
     # DETERMINE THE RIGHT DB INSTANCE TO CALL,
     # DEPENDING UPON WHETHER THE GET IS STRONGLY OR WEAKLY CONSISTENT
     # ASSIGN THE ENDPOINT TO url
-    url = 'http://localhost:3000/rating/'+entity
+
+    query_param_dict = parse_qs(urlparse(request.url).query, keep_blank_values=True)
+
+    if query_param_dict['consistency'] == 'weak':
+        shard_number = get_shard_number(entity)
+    else:
+        shard_number = get_shard_number(entity, consistent=True)
+
+    dbBasePort = shard_number
+
+    url = 'http://localhost:'+str(dbBasePort)+'/rating/'+entity
 
     # RESUME BOILERPLATE
     curdata = requests.get(url).json()
