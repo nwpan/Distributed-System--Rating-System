@@ -125,7 +125,7 @@ def get_rating(entity):
 @route('/rating/<entity>', method='DELETE')
 def delete_rating(entity):
     # DONE---NOTHING TO CHANGE
-    dbprimary = dbBasePort + hashEntity(entity, ndb)
+    dbprimary = dbBasePort + get_db_number(entity)
     url = 'http://localhost:'+str(dbprimary)+'/rating/'+entity
     resp = requests.delete(url)
     return resp
