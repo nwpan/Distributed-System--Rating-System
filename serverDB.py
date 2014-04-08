@@ -194,7 +194,6 @@ def sync_with_neighbour_queue(key):
         for primary_id, rating, choices, clocks in queue_resp.items()
             if current_channel != primary_id:
                 merged_results = merge_clock(rating, clocks, key)
-                client.hmset(key, merged_results) # this is broken
                 merged_results[db_id_key] = primary_id
                 digest_list.append(merged_results)
     return
