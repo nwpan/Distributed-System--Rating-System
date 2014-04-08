@@ -65,7 +65,7 @@ def put_rating(entity):
     rating = data.get('rating')
     clock = VectorClock.fromDict(data.get('clock'))
     query_param_dict = parse_qs(urlparse(request.url).query, keep_blank_values=True)
-    pdb.set_trace()
+
     # Basic sanity checks on the rating
     if isinstance(rating, int): rating = float(rating)
     if not isinstance(rating, float): return abort(400)
