@@ -166,11 +166,12 @@ def merge_with_db(setrating, setclock, key):
 	db_instance = current_channel
 
 	# Using the results from the merge_clock, fill up our digest-list
-	digest_list.append([db_instance, 
-	key, 
-	final_rating_result['rating'], 
-	final_rating_result['choices'], 
-	final_rating_result['clocks']])
+	digest_list.append({
+		'primary' : db_instance, 
+		'key' : key, 
+		'rating' : final_rating_result['rating'], 
+		'choices' :final_rating_result['choices'], 
+		'clocks' : final_rating_result['clocks']})
 
 	if len(digest_list) >= config['digest-length']:
 		for row in digest_list:
@@ -191,11 +192,17 @@ def sync_with_neighbour_queue(key):
 		# raised multiple times, as noted by Izaak but he said to verify first.
 		# If does not queue, I suggest implementing a mock queue.dequeue(channel)
 		# method. merge_clock({setclock:setrating}, client.hgetall(key))
-		for primary_id, rating, choices, clocks in resp.items():
-			if current_channel != primary_id:
+		for primary, key, rating, choices, clocks in resp.items():
+			if current_channel != primary:
 				merged_results = merge_clock(rating, clocks, key)
-				merged_results[db_id_key] = primary_id
-				digest_list.append(merged_results)
+				db_instance = current_channel
+        			# Using the results from the merge_clock, fill up our digest-list
+        			digest_list.append({
+                			'primary' : db_instance,
+                			'key' : key,
+                			'rating' : merged_results['rating'],
+                			'choices' : merged_results['choices'],
+                			'clocks' : merged_results['clocks']})
 	return True
 
 # A user updating their rating of something which can be accessed as:
