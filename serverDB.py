@@ -37,8 +37,8 @@ queue = Queue(qport)
 id = config['id']
 digest_list = []
 
-current_channel = 'db'+id
-neighbour_channel = 'db'+((id+1)%ndb)
+current_channel = 'db'+str(id)
+neighbour_channel = 'db'+str((id+1)%config['ndb'])
 db_id_key = 'db_id'
 
 # Connect to a single Redis instance
@@ -55,7 +55,7 @@ def average(key):
 	return average
 
 # returns result in the form of {rating, choices, clock}
-def final_rating_result(key):
+def get_final_rating_result(key):
 	teaHash = client.hgetall(key)
 	sum = 0
 	choices = []
@@ -104,12 +104,12 @@ def coalesce(v1_cached, v2_input):
 # merge one pair of (clock, raiting)
 # example merge_clock(5, {cO:2, cO:5}, '/ratings/greentea')  
 def merge_clock(rating, clock, key):
-	
+	global client
 	# make sure the clock is a VectorClock object first
 	if not isinstance(clock, VectorClock) and isinstance(clock, dict):
 		clock = VectorClock.fromDict(clock)
 	clockDict = clock.asDict()
-	
+	pdb.set_trace()
 	# lets get the hash from redis for this tea-x
 	teaHash = client.hgetall(key)
 
@@ -155,7 +155,7 @@ def merge_clock(rating, clock, key):
 		client.hset(key, json.dumps(clockDict), rating)
 	
 	# calls method that returns the result as {rating, choices, clock}
-	final_rating_result = final_rating_result(key)  
+	final_rating_result = get_final_rating_result(key)  
 	return final_rating_result 
 
 def merge_with_db(setrating, setclock, key):
@@ -182,18 +182,21 @@ def merge_with_db(setrating, setclock, key):
 # checks the our channel for any messages then sync with it, also
 # update the digest_list 
 def sync_with_neighbour_queue(key):
-    for queue_resp in queue.get(neighbour_channel):
+    queue_resp = queue.get(neighbour_channel)
+    if queue_resp == None:
+        return False
+    for resp in queue_resp:
         # According to Ted & Izaak, queue.get(neighbour_channel) automatically
         # dequeues the item from queue once called. Note that this issue has been,
         # raised multiple times, as noted by Izaak but he said to verify first.
         # If does not queue, I suggest implementing a mock queue.dequeue(channel)
         # method. merge_clock({setclock:setrating}, client.hgetall(key))
-        for primary_id, rating, choices, clocks in queue_resp.items()
+        for primary_id, rating, choices, clocks in resp.items():
             if current_channel != primary_id:
                 merged_results = merge_clock(rating, clocks, key)
                 merged_results[db_id_key] = primary_id
                 digest_list.append(merged_results)
-    return
+    return True
 
 # A user updating their rating of something which can be accessed as:
 # curl -XPUT -H'Content-type: application/json' -d'{ "rating": 5, "choices": [3, 4], "clocks": [{ "c1" : 5, "c2" : 3 }] }' http://localhost:3000/rating/bob
