@@ -38,7 +38,7 @@ id = config['id']
 digest_list = []
 
 current_channel = 'db'+str(id)
-neighbour_channel = 'db'+str((id+1)%config['ndb'])
+neighbour_channel = 'db'+str((id-1)%config['ndb'])
 db_id_key = 'db_id'
 
 # Connect to a single Redis instance
