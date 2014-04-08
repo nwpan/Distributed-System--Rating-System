@@ -31,11 +31,11 @@ port = config['port']
 ndb = config['ndb']
 dbBasePort = config['db-base-port']
 
-# get_shard_number(entity, ndb)
-# Takes in an entity and ndb, returns the server number.
 def get_db_number(entity):
     return int(hashlib.sha1(entity).hexdigest(), 16) % ndb
 
+# get_shard_number(entity, ndb)
+# Takes in an entity and ndb, returns the server number.
 def get_shard_number(entity, consistent=True):
     shard_number = None
     if consistent:
@@ -43,6 +43,7 @@ def get_shard_number(entity, consistent=True):
     else:
         shard_number = random.randint(3000, 3000+ndb-1)
     return shard_number
+
 # Update the rating of entity
 # This can be accessed using;
 #   curl -XPUT -H'Content-type: application/json' -d'{ "rating": 5, "clock": { "c1" : 5, "c2" : 3 } }' http://localhost:2500/rating/bob
