@@ -81,25 +81,25 @@ def get_final_rating_result(key):
 # 3 cases: new, incomparable, and stale
 def coalesce(v1_cached, v2_input):
 
-		# check to make sure it the arguments are VectorClock objects
-		error_msg = 'Must be a VectorClock object'
-		if not isinstance(v1_cached, VectorClock):
-				print(error_msg)
-				return abort(400)
-		if not isinstance(v2_input, VectorClock):
-				print(error_msg)
-				return abort(400)
+	# check to make sure it the arguments are VectorClock objects
+	error_msg = 'Must be a VectorClock object'
+	if not isinstance(v1_cached, VectorClock):
+		print(error_msg)
+		return abort(400)
+	if not isinstance(v2_input, VectorClock):
+		print(error_msg)
+		return abort(400)
 
-		# new input is most recent so lets return that one
-		if v1_cached < v2_input:
-				return [v2_input]
+	# new input is most recent so lets return that one
+	if v1_cached < v2_input:
+		return [v2_input]
 
-		# Incomparable data, let us return both
-		if (v1_cached < v2_input) == False and (v1_cached > v2_input) == False:
-				return [v1_cached, v2_input]
+	# Incomparable data, let us return both
+	if (v1_cached < v2_input) == False and (v1_cached > v2_input) == False:
+		return [v1_cached, v2_input]
 
-		# Well then...the new one is older so return the cached
-		return [v1_cached]
+	# Well then...the new one is older so return the cached
+	return [v1_cached]
 
 # merge one pair of (clock, raiting)
 # example merge_clock(5, {cO:2, cO:5}, '/ratings/greentea')  
@@ -252,15 +252,15 @@ def put_rating(entity):
 @route('/rating/<entity>', method='GET')
 def get_rating(entity):
 	key = '/rating/' + entity
-	
-	# lets grab the results of our work! O(N)         
-	result = get_final_rating_result(key)
 
 	# YOUR CODE HERE
 	# GOSSIP
 	# GET THE VALUE FROM THE DATABASE
 	# RETURN IT, REPLACING FOLLOWING
 	sync_with_neighbour_queue(key)
+
+        # lets grab the results of our work! O(N)         
+        result = get_final_rating_result(key)
 	
 	return {
 		'rating': result['rating'],
