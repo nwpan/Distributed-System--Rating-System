@@ -99,7 +99,8 @@ def coalesce(v1_cached, v2_input):
         # Well then...the new one is older so return the cached
         return [v1_cached]
 
-# merge one pair of (clock, raiting)  
+# merge one pair of (clock, raiting)
+# example merge_clock(5, {cO:2, cO:5}, '/ratings/greentea')  
 def merge_clock(rating, clock, key):
 	
 	# make sure the clock is a VectorClock object first
