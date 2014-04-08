@@ -108,6 +108,7 @@ def merge_clock(rating, clock, key):
 	# make sure the clock is a VectorClock object first
 	if not isinstance(clock, VectorClock) and isinstance(clock, dict):
 		clock = VectorClock.fromDict(clock)
+
 	clockDict = clock.asDict()
 
 	# lets get the hash from redis for this tea-x
@@ -187,23 +188,22 @@ def sync_with_neighbour_queue(key):
 	queue_resp = queue.get(neighbour_channel)
 	if queue_resp == None:
 		return False
-		# According to Ted & Izaak, queue.get(neighbour_channel) automatically
-		# dequeues the item from queue once called. Note that this issue has been,
-		# raised multiple times, as noted by Izaak but he said to verify first.
-		# If does not queue, I suggest implementing a mock queue.dequeue(channel)
-		# method. merge_clock({setclock:setrating}, client.hgetall(key))
-		pdb.set_trace()
-		if current_channel != queue_resp['primary']:
-
-			merged_results = merge_clock(queue_resp['rating'], queue_resp['clocks'], queue_resp['key'])
+	# According to Ted & Izaak, queue.get(neighbour_channel) automatically
+	# dequeues the item from queue once called. Note that this issue has been,
+	# raised multiple times, as noted by Izaak but he said to verify first.
+	# If does not queue, I suggest implementing a mock queue.dequeue(channel)
+	# method. merge_clock({setclock:setrating}, client.hgetall(key))
+	if current_channel != queue_resp['primary']:
+		for clock in queue_resp['clocks']:
+			merged_results = merge_clock(queue_resp['rating'], clock, queue_resp['key'])
 			db_instance = current_channel
-    			# Using the results from the merge_clock, fill up our digest-list
-    			digest_list.append({
-        			'primary' : db_instance,
-        			'key' : merged_results['key'],
-        			'rating' : merged_results['rating'],
-        			'choices' : merged_results['choices'],
-        			'clocks' : merged_results['clocks']})
+			# Using the results from the merge_clock, fill up our digest-list
+			digest_list.append({
+				'primary' : db_instance,
+				'key' : key,
+				'rating' : merged_results['rating'],
+				'choices' : merged_results['choices'],
+				'clocks' : clock})
 	return True
 
 # A user updating their rating of something which can be accessed as:
@@ -256,9 +256,8 @@ def get_rating(entity):
 	# GET THE VALUE FROM THE DATABASE
 	# RETURN IT, REPLACING FOLLOWING
 	sync_with_neighbour_queue(key)
-
-        # lets grab the results of our work! O(N)         
-        result = get_final_rating_result(key)
+	# lets grab the results of our work! O(N)         
+	result = get_final_rating_result(key)
 	
 	return {
 		'rating': result['rating'],
