@@ -231,11 +231,11 @@ def put_rating(entity):
 	sync_with_neighbour_queue(key)
 	
 	# lets grab the results of our work!	
-	result = final_rating_result(key) 
+	result = get_final_rating_result(key) 
 
 	# save the final rating average.  I DONT THINK WE NEED THIS!
 	key = '/final_ratings/' + entity
-	client.set(key, final_rating_result['rating'])
+	client.set(key, result['rating'])
 
 	# Return rating
 	return {
@@ -254,7 +254,7 @@ def get_rating(entity):
 	key = '/rating/' + entity
 	
 	# lets grab the results of our work! O(N)         
-	result = final_rating_result(key)
+	result = get_final_rating_result(key)
 
 	# YOUR CODE HERE
 	# GOSSIP
@@ -264,8 +264,8 @@ def get_rating(entity):
 	
 	return {
 		'rating': result['rating'],
-		'choices': json.dumps(result['choices']),
-		'clocks': json.dumps(result['clocks'])
+		'choices': result['choices'],
+		'clocks': result['clocks']
 	}
 
 # Delete the rating information for entity
