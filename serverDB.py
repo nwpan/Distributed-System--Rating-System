@@ -1,5 +1,4 @@
 #  Storage node for Assignment 6, CMPT 474, Spring 2014
-
 # Core libraries
 import os
 import sys
