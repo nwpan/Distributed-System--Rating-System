@@ -33,9 +33,16 @@ dbBasePort = config['db-base-port']
 
 # get_shard_number(entity, ndb)
 # Takes in an entity and ndb, returns the server number.
-def get_shard_number(entity, ndb):
+def get_db_number(entity):
     return int(hashlib.sha1(entity).hexdigest(), 16) % ndb
 
+def get_shard_number(entity, consistent=True):
+    shard_number = None
+    if consistent:
+        shard_number = 3000+get_db_number(entity)
+    else:
+        shard_number = random.randint(3000, 3000+ndb-1)
+    return shard_number
 # Update the rating of entity
 # This can be accessed using;
 #   curl -XPUT -H'Content-type: application/json' -d'{ "rating": 5, "clock": { "c1" : 5, "c2" : 3 } }' http://localhost:2500/rating/bob
@@ -63,11 +70,10 @@ def put_rating(entity):
     if isinstance(rating, int): rating = float(rating)
     if not isinstance(rating, float): return abort(400)
 
-    shard_number = None
-    if (query_param_dict['consistency'] == 'weak'):
-        shard_number = random.randint(3000, 3000+ndb-1)
+    if query_param_dict['consistency'] == 'weak':
+        shard_number = get_shard_number(entity)
     else:
-        shard_number = 3000+get_shard_number(entity, ndb)
+        shard_number = get_shard_number(entity, consistent=True)
 
     dbBasePort = shard_number
 
@@ -101,7 +107,7 @@ def get_rating(entity):
     # DETERMINE THE RIGHT DB INSTANCE TO CALL,
     # DEPENDING UPON WHETHER THE GET IS STRONGLY OR WEAKLY CONSISTENT
     # ASSIGN THE ENDPOINT TO url
-    url = 'http://localhost:3000/rating/strawberry-cream-white-tea'
+    url = 'http://localhost:3000/rating/'+entity
 
     # RESUME BOILERPLATE
     curdata = requests.get(url).json()
