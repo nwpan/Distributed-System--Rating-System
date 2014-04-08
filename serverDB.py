@@ -166,11 +166,11 @@ def merge_with_db(setrating, setclock, key):
 	db_instance = current_channel
 
 	# Using the results from the merge_clock, fill up our digest-list
-	digest_list.append(db_instance, 
+	digest_list.append([db_instance, 
 	key, 
 	final_rating_result['rating'], 
 	final_rating_result['choices'], 
-	final_rating_result['clocks'])
+	final_rating_result['clocks']])
 
 	if len(digest_list) >= config['digest-length']:
 		for row in digest_list:
