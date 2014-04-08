@@ -71,7 +71,7 @@ def put_rating(entity):
     if isinstance(rating, int): rating = float(rating)
     if not isinstance(rating, float): return abort(400)
 
-    if query_param_dict['consistency'] == 'weak':
+    if 'consistency' in query_param_dict.keys() and query_param_dict['consistency'] == 'weak':
         shard_number = get_shard_number(entity)
     else:
         shard_number = get_shard_number(entity, consistent=True)
@@ -111,7 +111,7 @@ def get_rating(entity):
 
     query_param_dict = parse_qs(urlparse(request.url).query, keep_blank_values=True)
 
-    if query_param_dict['consistency'] == 'weak':
+    if 'consistency' in query_param_dict.keys() and query_param_dict['consistency'] == 'weak':
         shard_number = get_shard_number(entity)
     else:
         shard_number = get_shard_number(entity, consistent=True)
