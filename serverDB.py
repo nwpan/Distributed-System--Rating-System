@@ -140,8 +140,8 @@ def merge_clock(rating, clock, key):
 				
 				# check if we can delete the old clock if a client in the  new clock 
 				# is newer than an old client's clock time.
-				for cli in redisClockDict:
-					   if redisClockDict[cli] < clock.asDict()[cli]:
+				for cli, clockTime in clock:
+					   if redisClockDict[cli] < clockTime:
 						  client.hdel(key, json.dumps(redisClockDict))
 		
 			
