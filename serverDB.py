@@ -22,14 +22,14 @@ base_DB_port = 3000
 # These values are defaults for when you start this server from the command line
 # They are overridden when you run it from test/run.py
 config = { 'id': 0,
-           'servers': [{ 'host': 'localhost', 'port': 6379 }],
-           'hostport': base_DB_port,
-           'qport': 6000,
-           'ndb': 1,
-           'digest-length': 1}
+		   'servers': [{ 'host': 'localhost', 'port': 6379 }],
+		   'hostport': base_DB_port,
+		   'qport': 6000,
+		   'ndb': 1,
+		   'digest-length': 1}
 
 if (len(sys.argv) > 1):
-    config = json.loads(sys.argv[1])
+	config = json.loads(sys.argv[1])
 
 # Gossip globals
 qport = config['qport']
@@ -81,25 +81,25 @@ def get_final_rating_result(key):
 # 3 cases: new, incomparable, and stale
 def coalesce(v1_cached, v2_input):
 
-        # check to make sure it the arguments are VectorClock objects
-        error_msg = 'Must be a VectorClock object'
-        if not isinstance(v1_cached, VectorClock):
-                print(error_msg)
-                return abort(400)
-        if not isinstance(v2_input, VectorClock):
-                print(error_msg)
-                return abort(400)
+		# check to make sure it the arguments are VectorClock objects
+		error_msg = 'Must be a VectorClock object'
+		if not isinstance(v1_cached, VectorClock):
+				print(error_msg)
+				return abort(400)
+		if not isinstance(v2_input, VectorClock):
+				print(error_msg)
+				return abort(400)
 
-        # new input is most recent so lets return that one
-        if v1_cached < v2_input:
-                return [v2_input]
+		# new input is most recent so lets return that one
+		if v1_cached < v2_input:
+				return [v2_input]
 
-        # Incomparable data, let us return both
-        if (v1_cached < v2_input) == False and (v1_cached > v2_input) == False:
-                return [v1_cached, v2_input]
+		# Incomparable data, let us return both
+		if (v1_cached < v2_input) == False and (v1_cached > v2_input) == False:
+				return [v1_cached, v2_input]
 
-        # Well then...the new one is older so return the cached
-        return [v1_cached]
+		# Well then...the new one is older so return the cached
+		return [v1_cached]
 
 # merge one pair of (clock, raiting)
 # example merge_clock(5, {cO:2, cO:5}, '/ratings/greentea')  
@@ -109,7 +109,7 @@ def merge_clock(rating, clock, key):
 	if not isinstance(clock, VectorClock) and isinstance(clock, dict):
 		clock = VectorClock.fromDict(clock)
 	clockDict = clock.asDict()
-	pdb.set_trace()
+
 	# lets get the hash from redis for this tea-x
 	teaHash = client.hgetall(key)
 
@@ -140,9 +140,9 @@ def merge_clock(rating, clock, key):
 				
 				# check if we can delete the old clock if a client in the  new clock 
 				# is newer than an old client's clock time.
-				for client, clockTime in redisClock: # iterate through each client
-					if redisClockDict[client] < clockTime:
-						client.hdel(key, json.dumps(redisClockDict))
+				for cli in redisClockDict:
+					   if redisClockDict[cli] < clock.asDict()[cli]:
+						  client.hdel(key, json.dumps(redisClockDict))
 		
 			
 			# the more recent case, replace the old one with the new one
@@ -160,43 +160,43 @@ def merge_clock(rating, clock, key):
 
 def merge_with_db(setrating, setclock, key):
 
-    # in a form of {rating, choices, clock}
-    final_rating_result = merge_clock(setrating, setclock, key)
+	# in a form of {rating, choices, clock}
+	final_rating_result = merge_clock(setrating, setclock, key)
 
-    db_instance = current_channel
+	db_instance = current_channel
 
-    # Using the results from the merge_clock, fill up our digest-list
-    digest_list.append(db_instance, 
+	# Using the results from the merge_clock, fill up our digest-list
+	digest_list.append(db_instance, 
 	key, 
 	final_rating_result['rating'], 
 	final_rating_result['choices'], 
 	final_rating_result['clocks'])
 
-    if len(digest_list) >= config['digest-length']:
-        for row in digest_list:
-            queue.put(current_channel, row)
-    else:
-        return False
-    return True
+	if len(digest_list) >= config['digest-length']:
+		for row in digest_list:
+			queue.put(current_channel, row)
+	else:
+		return False
+	return True
 
 # checks the our channel for any messages then sync with it, also
 # update the digest_list 
 def sync_with_neighbour_queue(key):
-    queue_resp = queue.get(neighbour_channel)
-    if queue_resp == None:
-        return False
-    for resp in queue_resp:
-        # According to Ted & Izaak, queue.get(neighbour_channel) automatically
-        # dequeues the item from queue once called. Note that this issue has been,
-        # raised multiple times, as noted by Izaak but he said to verify first.
-        # If does not queue, I suggest implementing a mock queue.dequeue(channel)
-        # method. merge_clock({setclock:setrating}, client.hgetall(key))
-        for primary_id, rating, choices, clocks in resp.items():
-            if current_channel != primary_id:
-                merged_results = merge_clock(rating, clocks, key)
-                merged_results[db_id_key] = primary_id
-                digest_list.append(merged_results)
-    return True
+	queue_resp = queue.get(neighbour_channel)
+	if queue_resp == None:
+		return False
+	for resp in queue_resp:
+		# According to Ted & Izaak, queue.get(neighbour_channel) automatically
+		# dequeues the item from queue once called. Note that this issue has been,
+		# raised multiple times, as noted by Izaak but he said to verify first.
+		# If does not queue, I suggest implementing a mock queue.dequeue(channel)
+		# method. merge_clock({setclock:setrating}, client.hgetall(key))
+		for primary_id, rating, choices, clocks in resp.items():
+			if current_channel != primary_id:
+				merged_results = merge_clock(rating, clocks, key)
+				merged_results[db_id_key] = primary_id
+				digest_list.append(merged_results)
+	return True
 
 # A user updating their rating of something which can be accessed as:
 # curl -XPUT -H'Content-type: application/json' -d'{ "rating": 5, "choices": [3, 4], "clocks": [{ "c1" : 5, "c2" : 3 }] }' http://localhost:3000/rating/bob
@@ -204,36 +204,36 @@ def sync_with_neighbour_queue(key):
 # { rating: 5 }
 @route('/rating/<entity>', method='PUT')
 def put_rating(entity):
-    # Check to make sure JSON is ok
-    mimetype = mimeparse.best_match(['application/json'], request.headers.get('Accept'))
-    if not mimetype: return abort(406)
+	# Check to make sure JSON is ok
+	mimetype = mimeparse.best_match(['application/json'], request.headers.get('Accept'))
+	if not mimetype: return abort(406)
 
-    # Check to make sure the data we're getting is JSON
-    if request.headers.get('Content-Type') != 'application/json': return abort(415)
+	# Check to make sure the data we're getting is JSON
+	if request.headers.get('Content-Type') != 'application/json': return abort(415)
 
-    response.headers.append('Content-Type', mimetype)
+	response.headers.append('Content-Type', mimetype)
 
-    # Parse the request
-    data = json.load(request.body)
-    setrating = data.get('rating')
-    setclock = VectorClock.fromDict(data.get('clock'))
+	# Parse the request
+	data = json.load(request.body)
+	setrating = data.get('rating')
+	setclock = VectorClock.fromDict(data.get('clock'))
 
-    key = '/rating/'+entity
+	key = '/rating/'+entity
 
-    merge_with_db(setrating, setclock, key)
-    sync_with_neighbour_queue(key)
-    
-    # lets grab the results of our work!	
-    result = final_rating_result(key) 
+	merge_with_db(setrating, setclock, key)
+	sync_with_neighbour_queue(key)
+	
+	# lets grab the results of our work!	
+	result = final_rating_result(key) 
 
-    # save the final rating average.  I DONT THINK WE NEED THIS!
-    key = '/final_ratings/' + entity
-    client.set(key, final_rating_result['rating'])
+	# save the final rating average.  I DONT THINK WE NEED THIS!
+	key = '/final_ratings/' + entity
+	client.set(key, final_rating_result['rating'])
 
-    # Return rating
-    return {
-    	"rating": result["rating"]
-    }
+	# Return rating
+	return {
+		"rating": result["rating"]
+	}
 
 # Get the aggregate rating of entity
 # This can be accesed as:
@@ -244,22 +244,22 @@ def put_rating(entity):
 # This function also causes a gossip merge
 @route('/rating/<entity>', method='GET')
 def get_rating(entity):
-    key = '/rating/' + entity
-    
-    # lets grab the results of our work! O(N)         
-    result = final_rating_result(key)
+	key = '/rating/' + entity
+	
+	# lets grab the results of our work! O(N)         
+	result = final_rating_result(key)
 
-    # YOUR CODE HERE
-    # GOSSIP
-    # GET THE VALUE FROM THE DATABASE
-    # RETURN IT, REPLACING FOLLOWING
-    sync_with_neighbour_queue(key)
-    
-    return {
-        'rating': result['rating'],
-        'choices': json.dumps(result['choices']),
-        'clocks': json.dumps(result['clocks'])
-    }
+	# YOUR CODE HERE
+	# GOSSIP
+	# GET THE VALUE FROM THE DATABASE
+	# RETURN IT, REPLACING FOLLOWING
+	sync_with_neighbour_queue(key)
+	
+	return {
+		'rating': result['rating'],
+		'choices': json.dumps(result['choices']),
+		'clocks': json.dumps(result['clocks'])
+	}
 
 # Delete the rating information for entity
 # This can be accessed as:
@@ -268,11 +268,11 @@ def get_rating(entity):
 #   { rating: null }
 @route('/rating/<entity>', method='DELETE')
 def delete_rating(entity):
-    # ALREADY DONE--YOU DON'T NEED TO ADD ANYTHING
-    count = client.delete('/rating/'+entity)
-    if count == 0: return abort(404)
-    return { "rating": None }
+	# ALREADY DONE--YOU DON'T NEED TO ADD ANYTHING
+	count = client.delete('/rating/'+entity)
+	if count == 0: return abort(404)
+	return { "rating": None }
 
 # Fire the engines
 if __name__ == '__main__':
-    run(host='0.0.0.0', port=os.getenv('PORT', config['hostport']), quiet=True)
+	run(host='0.0.0.0', port=os.getenv('PORT', config['hostport']), quiet=True)
