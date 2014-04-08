@@ -46,7 +46,7 @@ db_id_key = 'db_id'
 client = redis.StrictRedis(host=config['servers'][0]['host'], port=config['servers'][0]['port'], db=0)
 
 def merge_clock(ratings, clocks):
-    # merge stuff here
+    # Coalesce method... here?
     return None
 
 def merge_with_db(setrating, setclock, key):
@@ -70,16 +70,20 @@ def merge_with_db(setrating, setclock, key):
 
 # checks the our channel for any messages then sync with it, also
 # update the digest_list 
-def sync_with_neighbor_queue():
-
-    for primary_id, rating, choices, clocks in queue.get(neighbour_channel):
-        # queue.dequeue(channel), using the nonexistent dequeue method
-        if current_channel != primary_id:
-            merged_results = merge_clock({rating, choices, clocks}, {})
-            client.hmset(key, merged_results) # this is broken
-            merged_results[db_id_key] = primary_id
-            digest_list.append(merged_results)
-
+def sync_with_neighbour_queue():
+    for queue_resp in queue.get(neighbour_channel):
+        # According to Ted & Izaak, queue.get(neighbour_channel) automatically
+        # dequeues the item from queue once called. Note that this issue has been,
+        # raised multiple times, as noted by Izaak but he said to verify first.
+        # If does not queue, I suggest implementing a mock queue.dequeue(channel)
+        # method. 
+        for primary_id, rating, choices, clocks in queue_resp.items()
+            if current_channel != primary_id:
+                merged_results = merge_clock({rating, choices, clocks}, {})
+                client.hmset(key, merged_results) # this is broken
+                merged_results[db_id_key] = primary_id
+                digest_list.append(merged_results)
+    return
 
 # A user updating their rating of something which can be accessed as:
 # curl -XPUT -H'Content-type: application/json' -d'{ "rating": 5, "choices": [3, 4], "clocks": [{ "c1" : 5, "c2" : 3 }] }' http://localhost:3000/rating/bob
@@ -104,7 +108,7 @@ def put_rating(entity):
     key = '/rating/'+entity
 
     merge_with_db(setrating, setclock, key)
-    sync_with_neighbor_queue()
+    sync_with_neighbour_queue()
 
     finalrating = 0.0
     # SAVE NEW VALUES
@@ -131,7 +135,7 @@ def get_rating(entity):
     # GOSSIP
     # GET THE VALUE FROM THE DATABASE
     # RETURN IT, REPLACING FOLLOWING
-    sync_with_neighbor_queue()
+    sync_with_neighbour_queue()
     
     return {
         'rating': 0.0,

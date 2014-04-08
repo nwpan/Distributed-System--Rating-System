@@ -31,10 +31,18 @@ port = config['port']
 ndb = config['ndb']
 dbBasePort = config['db-base-port']
 
+def get_db_number(entity):
+    return int(hashlib.sha1(entity).hexdigest(), 16) % ndb
+
 # get_shard_number(entity, ndb)
 # Takes in an entity and ndb, returns the server number.
-def get_shard_number(entity, ndb):
-    return int(hashlib.sha1(entity).hexdigest(), 16) % ndb
+def get_shard_number(entity, consistent=True):
+    shard_number = None
+    if consistent:
+        shard_number = 3000+get_db_number(entity)
+    else:
+        shard_number = random.randint(3000, 3000+ndb-1)
+    return shard_number
 
 # Update the rating of entity
 # This can be accessed using;
@@ -58,16 +66,15 @@ def put_rating(entity):
     rating = data.get('rating')
     clock = VectorClock.fromDict(data.get('clock'))
     query_param_dict = parse_qs(urlparse(request.url).query, keep_blank_values=True)
-    pdb.set_trace()
+
     # Basic sanity checks on the rating
     if isinstance(rating, int): rating = float(rating)
     if not isinstance(rating, float): return abort(400)
 
-    shard_number = None
-    if (query_param_dict['consistency'] == 'weak'):
-        shard_number = random.randint(3000, 3000+ndb-1)
+    if query_param_dict['consistency'] == 'weak':
+        shard_number = get_shard_number(entity)
     else:
-        shard_number = 3000+get_shard_number(entity, ndb)
+        shard_number = get_shard_number(entity, consistent=True)
 
     dbBasePort = shard_number
 
@@ -101,7 +108,17 @@ def get_rating(entity):
     # DETERMINE THE RIGHT DB INSTANCE TO CALL,
     # DEPENDING UPON WHETHER THE GET IS STRONGLY OR WEAKLY CONSISTENT
     # ASSIGN THE ENDPOINT TO url
-    url = 'http://localhost:3000/rating/strawberry-cream-white-tea'
+
+    query_param_dict = parse_qs(urlparse(request.url).query, keep_blank_values=True)
+
+    if query_param_dict['consistency'] == 'weak':
+        shard_number = get_shard_number(entity)
+    else:
+        shard_number = get_shard_number(entity, consistent=True)
+
+    dbBasePort = shard_number
+
+    url = 'http://localhost:'+str(dbBasePort)+'/rating/'+entity
 
     # RESUME BOILERPLATE
     curdata = requests.get(url).json()
@@ -119,7 +136,7 @@ def get_rating(entity):
 @route('/rating/<entity>', method='DELETE')
 def delete_rating(entity):
     # DONE---NOTHING TO CHANGE
-    dbprimary = dbBasePort + hashEntity(entity, ndb)
+    dbprimary = dbBasePort + get_db_number(entity)
     url = 'http://localhost:'+str(dbprimary)+'/rating/'+entity
     resp = requests.delete(url)
     return resp
