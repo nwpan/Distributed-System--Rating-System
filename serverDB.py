@@ -155,12 +155,7 @@ def merge_clock(rating, clock, key):
 		client.hset(key, json.dumps(clockDict), rating)
 	
 	# calls method that returns the result as {rating, choices, clock}
-	final_rating_result = final_rating_result(key) 
-	
-	# save the final rating average
-	key = '/final_ratings/' + entity
-	client.set(key, final_rating_result['rating'])
- 
+	final_rating_result = final_rating_result(key)  
 	return final_rating_result 
 
 def merge_with_db(setrating, setclock, key):
@@ -224,15 +219,17 @@ def put_rating(entity):
 
     merge_with_db(setrating, setclock, key)
     sync_with_neighbour_queue(key)
+    
+    # lets grab the results of our work!	
+    result = final_rating_result(key) 
 
-    finalrating = 0.0
-    # SAVE NEW VALUES
-
-    # GOSSIP
+    # save the final rating average.  I DONT THINK WE NEED THIS!
+    key = '/final_ratings/' + entity
+    client.set(key, final_rating_result['rating'])
 
     # Return rating
     return {
-            "rating": finalrating
+    	"rating": result["rating"]
     }
 
 # Get the aggregate rating of entity
@@ -245,6 +242,9 @@ def put_rating(entity):
 @route('/rating/<entity>', method='GET')
 def get_rating(entity):
     key = '/rating/' + entity
+    
+    # lets grab the results of our work! O(N)         
+    result = final_rating_result(key)
 
     # YOUR CODE HERE
     # GOSSIP
@@ -253,9 +253,9 @@ def get_rating(entity):
     sync_with_neighbour_queue(key)
     
     return {
-        'rating': 0.0,
-        'choices': [],
-        'clocks': []
+        'rating': result['rating'],
+        'choices': json.dumps(result['choices']),
+        'clocks': json.dumps(result['clocks'])
     }
 
 # Delete the rating information for entity
