@@ -140,8 +140,9 @@ def merge_clock(rating, clock, key):
 				
 				# check if we can delete the old clock if a client in the  new clock 
 				# is newer than an old client's clock time.
-				for cli, clockTime in clock:
-					   if redisClockDict[cli] < clockTime:
+
+				for cli in clockDict:
+					   if redisClockDict[cli] < clockDict[cli]:
 						  client.hdel(key, json.dumps(redisClockDict))
 		
 			
@@ -186,23 +187,23 @@ def sync_with_neighbour_queue(key):
 	queue_resp = queue.get(neighbour_channel)
 	if queue_resp == None:
 		return False
-	for resp in queue_resp:
 		# According to Ted & Izaak, queue.get(neighbour_channel) automatically
 		# dequeues the item from queue once called. Note that this issue has been,
 		# raised multiple times, as noted by Izaak but he said to verify first.
 		# If does not queue, I suggest implementing a mock queue.dequeue(channel)
 		# method. merge_clock({setclock:setrating}, client.hgetall(key))
-		for primary, key, rating, choices, clocks in resp.items():
-			if current_channel != primary:
-				merged_results = merge_clock(rating, clocks, key)
-				db_instance = current_channel
-        			# Using the results from the merge_clock, fill up our digest-list
-        			digest_list.append({
-                			'primary' : db_instance,
-                			'key' : key,
-                			'rating' : merged_results['rating'],
-                			'choices' : merged_results['choices'],
-                			'clocks' : merged_results['clocks']})
+		pdb.set_trace()
+		if current_channel != queue_resp['primary']:
+
+			merged_results = merge_clock(queue_resp['rating'], queue_resp['clocks'], queue_resp['key'])
+			db_instance = current_channel
+    			# Using the results from the merge_clock, fill up our digest-list
+    			digest_list.append({
+        			'primary' : db_instance,
+        			'key' : merged_results['key'],
+        			'rating' : merged_results['rating'],
+        			'choices' : merged_results['choices'],
+        			'clocks' : merged_results['clocks']})
 	return True
 
 # A user updating their rating of something which can be accessed as:
