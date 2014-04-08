@@ -10,6 +10,7 @@ import random
 import string
 import pdb
 import hashlib
+from urlparse import parse_qs, urlparse
 
 # Libraries that have to have been installed by pip
 import requests
@@ -56,21 +57,25 @@ def put_rating(entity):
     data = json.load(request.body)
     rating = data.get('rating')
     clock = VectorClock.fromDict(data.get('clock'))
-
+    query_param_dict = parse_qs(urlparse(request.url).query, keep_blank_values=True)
+    pdb.set_trace()
     # Basic sanity checks on the rating
     if isinstance(rating, int): rating = float(rating)
     if not isinstance(rating, float): return abort(400)
 
-    shard_number = get_shard_number(entity, ndb)
+    shard_number = None
+    if (query_param_dict['consistency'] == 'weak'):
+        shard_number = random.randint(3000, 3000+ndb-1)
+    else:
+        shard_number = 3000+get_shard_number(entity, ndb)
+
+    dbBasePort = shard_number
 
     url = 'http://localhost:'+str(dbBasePort)+'/rating/'+entity
 
-    # RESUME BOILERPLATE CODE...
-    # Update the rating
     res = requests.put(url,
                        data=json.dumps({'rating': rating,
-                                        'clock': clock.asDict(),
-                                        'shard': shard_number}),
+                                        'clock': clock.asDict()}),
                        headers={'content-type': 'application/json'})
 
     # Return the new rating for the entity
