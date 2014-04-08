@@ -227,15 +227,12 @@ def put_rating(entity):
 
 	key = '/rating/'+entity
 
+	#sync_with_neighbour_queue(key)
 	merge_with_db(setrating, setclock, key)
 	sync_with_neighbour_queue(key)
 	
 	# lets grab the results of our work!	
 	result = get_final_rating_result(key) 
-
-	# save the final rating average.  I DONT THINK WE NEED THIS!
-	key = '/final_ratings/' + entity
-	client.set(key, result['rating'])
 
 	# Return rating
 	return {
