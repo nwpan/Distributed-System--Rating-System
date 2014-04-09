@@ -67,10 +67,11 @@ def get_final_rating_result(key):
 		rating = float(rating)
 		sum = sum + rating
 		choices.append(rating)
-		clocks.append(json.loads(clockJsonString))
+		clockDict = json.loads(clockJsonString)
+		clocks.append(clockDict)
 	if sum == 0: average = 0 # or should it be none
 	else: average = sum/len(teaHash)
-	
+
 	return {
 		"rating" : average,
 		"choices" : choices, #json.dumps(choices),
@@ -110,8 +111,8 @@ def merge_clock(rating, clock, key):
 	if not isinstance(clock, VectorClock) and isinstance(clock, dict):
 		clock = VectorClock.fromDict(clock)
 
-	if not isinstance(clock, VectorClock):
-		pdb.set_trace()
+	#if not isinstance(clock, VectorClock) and not isinstance(clock,dict):
+	#	pdb.set_trace()
 	clockDict = clock.asDict()
 
 	# lets get the hash from redis for this tea-x
@@ -197,6 +198,9 @@ def sync_with_neighbour_queue(key):
 	item = queue.get(neighbour_channel)
 	while item  != None:
 		if current_channel != item['primary']:
+
+			if isinstance(item['clocks'], dict):
+				item['clocks'] = [item['clocks']]
 			for clock in item['clocks']:
 				merged_results = merge_clock(item['rating'], clock, item['key'])
 				db_instance = current_channel
@@ -229,8 +233,9 @@ def put_rating(entity):
 	data = json.load(request.body)
 	setrating = data.get('rating')
 	setclock = VectorClock.fromDict(data.get('clock'))
-
+	
 	key = '/rating/'+entity
+	#key = '/rating-and-clock/'+entity
 
 	#sync_with_neighbour_queue(key)
 	merge_with_db(setrating, setclock, key)
@@ -239,6 +244,9 @@ def put_rating(entity):
 	# lets grab the results of our work!	
 	result = get_final_rating_result(key) 
 
+	#final_rating_key = '/rating/'+entity
+	#client.hset(final_rating_key, 'rating', result["rating"])
+	
 	# Return rating
 	return {
 		"rating": result["rating"]
@@ -254,7 +262,7 @@ def put_rating(entity):
 @route('/rating/<entity>', method='GET')
 def get_rating(entity):
 	key = '/rating/' + entity
-
+	#key = '/rating-and-clock/'+entity
 	# YOUR CODE HERE
 	# GOSSIP
 	# GET THE VALUE FROM THE DATABASE
@@ -263,6 +271,9 @@ def get_rating(entity):
 	# lets grab the results of our work! O(N)         
 	result = get_final_rating_result(key)
 	
+	#final_rating_key = '/rating/'+entity
+        #client.hset(final_rating_key, 'rating', result["rating"])
+
 	return {
 		'rating': result['rating'],
 		'choices': result['choices'],
@@ -278,6 +289,8 @@ def get_rating(entity):
 def delete_rating(entity):
 	# ALREADY DONE--YOU DON'T NEED TO ADD ANYTHING
 	count = client.delete('/rating/'+entity)
+	#key = '/rating-and-clock/'+entity
+	#count = client.delete(key)
 	if count == 0: return abort(404)
 	return { "rating": None }
 
