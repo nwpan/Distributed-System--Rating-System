@@ -415,7 +415,7 @@ def gossipTest(result):
         result({'type': 'KEY_NOT_SAVED'})
         return
     dbsub = [dbSubscriber(i) for i in (range(dbid, ndb)+range(0, dbid))[:ndb-1]]
-    result({'type': 'int', 'entity': firstEnt, 'got': clients[dbid].hget(mkKey(firstEnt), 'rating'), 'expected': 1})
+    result({'type': 'int', 'entity': firstEnt, 'got': get(firstEnt, port=dbPort(dbid))[0], 'expected': 1})
 
     # Overfill the digest and force a gossip push
     for i in range(1, digest_length+1):
@@ -435,16 +435,16 @@ def gossipTest(result):
         and force a gossip.
     """
     put('hello', 2, cv, dbPort(dbsub[0])) # Direct to DB
-    result({'type': 'int', 'entity': firstEnt, 'got': clients[dbsub[0]].hget(mkKey(firstEnt), 'rating'), 'expected': 1})
+    result({'type': 'int', 'entity': firstEnt, 'got': get(firstEnt, port=dbPort(dbsub[0]))[0], 'expected': 1})
 
     put('oliver', 3, cv, dbPort(dbsub[1])) # Direct to DB
-    result({'type': 'int', 'entity': 'hello', 'got': clients[dbsub[1]].hget(mkKey('hello'), 'rating'), 'expected': 2})
+    result({'type': 'int', 'entity': 'hello', 'got': get('hello', port=dbPort(dbsub[1]))[0], 'expected': 2})
 
     put('zoo', 4, cv, dbPort(dbsub[2])) # Direct to DB
-    result({'type': 'int', 'entity': 'oliver', 'got': clients[dbsub[2]].hget(mkKey('oliver'), 'rating'), 'expected': 3})
+    result({'type': 'int', 'entity': 'oliver', 'got': get('oliver', port=dbPort(dbsub[2]))[0], 'expected': 3})
 
     put(firstEnt, 5, VectorClock().update('c0', 2)) # Routed through LB
-    result({'type': 'int', 'entity': firstEnt, 'got': clients[dbid].hget(mkKey(firstEnt), 'rating'), 'expected': 5})
+    result({'type': 'int', 'entity': firstEnt, 'got': get(firstEnt)[0], 'expected': 5})
 
 @test()
 def forceGossip(result):
@@ -558,6 +558,8 @@ def highVolume(result):
             # It will stop on the first incorrect rating. You
             # can then examine debugging output and the Redis DBs
             # (using the --leavedb option)
+            # You will have to modify the hget() calls to reflect
+            # your specific Redis format.
             if float(r) != float(dbVals[entity]['rating']):
                 print entity, 'got', r, 'expected', dbVals[entity]
                 for i in range(ndb):
@@ -618,11 +620,12 @@ def convergence(result):
     time = doNoise(entNoise, client, time, maxRating, 100)
 
     # Check that every client has the value set for entMain
-    for client in clients:
+    for i in range(ndb):
+        r, ch, cl = get(entMain, port=dbPort(i))
         testResult(result,
-                   client.hget(mkKey(entMain), 'rating'), rateMain,
-                   json.loads(client.hget(mkKey(entMain), 'choices')), [rateMain],
-                   [VectorClock.fromDict(vcd) for vcd in json.loads(client.hget(mkKey(entMain), 'clocks'))], [vcMain],
+                   r, rateMain,
+                   ch, [rateMain],
+                   cl, [vcMain],
                    entMain)
 
     # Check that a bunch of eventually consistent reads gives the right answer
