@@ -106,10 +106,12 @@ random.seed(args.key)
 
 ITEM = 'zoo'
 
-ndb = args.ndb # Number of database nodes
-nlb = 1 # Number of load balancers
-nq = 1 # Number of queue servers
-digest_length = 2 # Number of PUTs in each digest
+
+active = {} # Active parameters for current test
+active['ndb'] = args.ndb    # Number of database servers
+active['nlb'] = 1           # Number of load balancers
+active['nq'] = 1            # Number of queue servers
+active['digest-length'] = 2 # Length of digests for gossip
 
 # Ports for the services
 lb_base = 2500 # Base port number for load balancers
@@ -127,7 +129,7 @@ if os.path.exists(db): shutil.rmtree(db)
 os.makedirs(log)
 os.makedirs(db)
 
-rd_configs = [ { 'id': str(i), 'host': 'localhost', 'rd-port': rd_base+i } for i in range(ndb) ]
+rd_configs = [ { 'id': str(i), 'host': 'localhost', 'rd-port': rd_base+i } for i in range(active['ndb']) ]
 rd_processes =  [ subprocess.Popen(['redis-server',
                                 '--port', str(config['rd-port']),
                                 '--bind', '127.0.0.1',
@@ -141,22 +143,22 @@ clients = [ redis.StrictRedis(host=config['host'], port=config['rd-port'], db=0)
 lb_configs = [ {'id': i,
                 'logfile': os.path.join(log, 'serverLB'+str(i)+'.log'),
                 'port': lb_base+i,
-                'ndb': ndb,
-                'db-base-port': db_base} for i in range(nlb) ]
-lb_servers = [ subprocess.Popen(['python', os.path.join(base, 'serverLB.py'), json.dumps(config)]) for config in lb_configs ]
+                'ndb': active['ndb'],
+                'db-base-port': db_base} for i in range(active['nlb']) ]
+lb_servers = []
 
-qs_configs = [ {'id': i, 'port': qs_base+i, 'nq': nq, 'ndb': ndb} for i in range(nq) ]
+qs_configs = [ {'id': i, 'port': qs_base+i, 'nq': active['nq'], 'ndb': active['ndb']} for i in range(active['nq']) ]
 qs_servers = [ subprocess.Popen(['python', os.path.join(base, 'serverQ.py'), json.dumps(config)]) for config in qs_configs ]
 
 db_configs = [ {'id': i,
                 'logfile': os.path.join(log, 'serverDB'+str(i)+'.log'),
                 'servers':[{'host': 'localhost', 'port': rd_base+i}],
                 'hostport': db_base+i,
-                'ndb': ndb,
+                'ndb': active['ndb'],
                 'baseDBport': db_base,
                 'qport': qs_base,
-                'digest-length': digest_length}
-                for i in range(ndb)]
+                'digest-length': active['digest-length']}
+                for i in range(active['ndb'])]
 dbTestConfigs = {} # Specialized db_configs for specific tests
 db_servers = []
 
@@ -181,11 +183,11 @@ def getDBId(entity):
 
 def dbSubscriber(id):
     """ Return the id of the DB server that subscribes to id's channel. """
-    return (id+1) % ndb
+    return (id+1) % active['ndb']
 
 def dbPublisher(id):
     """ Return the id of the publisher of the channel that id subscribes. """
-    return (id-1) % ndb
+    return (id-1) % active['ndb']
 
 def dbPort(id):
     """ Return the port number for a DB id. """
@@ -257,28 +259,40 @@ def flush():
     for client in clients:
         client.flushall()
 
-def restartDBServers(testName):
-    stopDBServers()
+def restartServers(testName):
+    stopServers()
     if len(db_servers) > 0: # Only drain queue if a test has been run
         res = requests.delete('http://localhost:'+str(qs_base)+'/clear')
-    startDBServers(testName)
+    startServers(testName)
 
-def startDBServers(testName):
+def startServers(testName):
     global db_servers
+    global lb_servers
     if testName in dbTestConfigs:
-        configs = dbTestConfigs[testName]
+        test_db_confs = dbTestConfigs[testName]
     else:
-        configs = db_configs
+        test_db_confs = db_configs
+
     db_servers = [ subprocess.Popen(['python',
                                      os.path.join(base, 'serverDB.py'),
                                      json.dumps(config)])
-                                     for config in configs ]
-    # Give the server some time to start up
+                                     for config in test_db_confs ]
+
+    active['ndb'] = test_db_confs[0]['ndb']
+    active['digest-length'] = test_db_confs[0]['digest-length']
+    # Start LB with the active NDB
+    test_lb_confs = copy.deepcopy(lb_configs)
+    for lbconf in test_lb_confs:
+        lbconf['ndb'] = active['ndb']
+    lb_servers = [ subprocess.Popen(['python', os.path.join(base, 'serverLB.py'), json.dumps(config)]) for config in test_lb_confs ]
+    
+    # Give the servers some time to start up
     time.sleep(args.wait)
 
 
-def stopDBServers():
+def stopServers():
     if len(db_servers) > 0:
+        for lb_server in lb_servers: lb_server.terminate()
         for db_server in db_servers: db_server.terminate()
 
 def count():
@@ -307,7 +321,7 @@ print("Running test #"+args.key)
 
 # Some general information
 result({ 'name': 'info', 'type': 'KEY', 'value': args.key })
-result({ 'name': 'info', 'type': 'SHARD_COUNT', 'value': ndb })
+result({ 'name': 'info', 'type': 'SHARD_COUNT', 'value': active['ndb'] })
 
 tests = [ ]
 def test():
@@ -321,7 +335,7 @@ def test():
             info("Running test %s" % (f.__name__))
             # Clean the database before subsequent tests
             flush()
-            restartDBServers(f.__name__)
+            restartServers(f.__name__)
             # Reset the RNG to a known value
             random.seed(args.key+'/'+f.__name__)
             f(rx, *a)
@@ -414,11 +428,11 @@ def gossipTest(result):
     if dbid == -1:
         result({'type': 'KEY_NOT_SAVED'})
         return
-    dbsub = [dbSubscriber(i) for i in (range(dbid, ndb)+range(0, dbid))[:ndb-1]]
+    dbsub = [dbSubscriber(i) for i in (range(dbid, active['ndb'])+range(0, dbid))[:active['ndb']-1]]
     result({'type': 'int', 'entity': firstEnt, 'got': get(firstEnt, port=dbPort(dbid))[0], 'expected': 1})
 
     # Overfill the digest and force a gossip push
-    for i in range(1, digest_length+1):
+    for i in range(1, active['digest-length']+1):
         item = base + str(i)
         put(item, 1, cv, dbPort(dbid))
 
@@ -452,7 +466,7 @@ def forceGossip(result):
         This test uses the default digest length. Writes will be
         retained and only sent via gossip when the digest is full.
     """
-    if ndb <= 1:
+    if active['ndb'] <= 1:
         result({'type': 'TEST_SKIPPED', 'reason': 'Only 1 database (no gossip)'})
     gossipTest(result)
 
@@ -463,7 +477,7 @@ def digestLength1(result):
     """
     configs = copy.deepcopy(db_configs)
     for config in configs:
-        config['digest_length'] = 1
+        config['digest-length'] = 1
     dbTestConfigs['digestLength1'] = configs
     gossipTest(result)
 
@@ -475,7 +489,7 @@ def simpleOneDB(result):
     """
     configs = [copy.deepcopy(db_configs[0])]
     configs[0]['ndb'] = 1
-    configs[0]['digest_length'] = 1
+    configs[0]['digest-length'] = 1
     dbTestConfigs['simpleOneDB'] = configs
 
     # Read/Write/Read first entity
@@ -510,7 +524,7 @@ def testGetGossip(result):
         the test directly gets from the DB instance, forcing it to merge
         any pending gossip.
     """
-    if ndb <= 1:
+    if active['ndb'] <= 1:
         result({'type': 'TEST_SKIPPED', 'reason': 'Only 1 database (no gossip)'})
 
     base = 'aardvark'
@@ -524,7 +538,7 @@ def testGetGossip(result):
         return
     dbsub = dbSubscriber(dbId)
 
-    for i in range(1,digest_length+1):
+    for i in range(1,active['digest-length']+1):
         item = base + str(i)
         put(item, 1, vc, dbPort(dbId))
 
@@ -562,7 +576,7 @@ def highVolume(result):
             # your specific Redis format.
             if float(r) != float(dbVals[entity]['rating']):
                 print entity, 'got', r, 'expected', dbVals[entity]
-                for i in range(ndb):
+                for i in range(active['ndb']):
                     print ('client', i, 'has', clients[i].hget(mkKey(entity), 'rating'),
                         clients[i].hget(mkKey(entity), 'choices'), clients[i].hget(mkKey(entity), 'clocks'))
                 raise Exception('highVolume error')
@@ -620,7 +634,7 @@ def convergence(result):
     time = doNoise(entNoise, client, time, maxRating, 100)
 
     # Check that every client has the value set for entMain
-    for i in range(ndb):
+    for i in range(active['ndb']):
         r, ch, cl = get(entMain, port=dbPort(i))
         testResult(result,
                    r, rateMain,
@@ -640,16 +654,13 @@ def convergence(result):
 
 # Go through all the tests and run them
 try:
-    # Start our servers
-    #startDBServers()
-
     for test in tests:
         if args.test == None or args.test == test.__name__:
             test()
 finally:
     # Shut. down. everything.
     for lb_server in lb_servers: lb_server.terminate()
-    stopDBServers()
+    stopServers()
     for qs_server in qs_servers: qs_server.terminate()
     if not args.leavedb:
         for p in rd_processes: p.terminate()
