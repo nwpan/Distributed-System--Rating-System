@@ -208,7 +208,7 @@ def sync_with_neighbour_queue(key):
 				merged_results = merge_clock(item['rating'], clock, item['key'])
 				
 				digest_list.append({
-					'primary' : merged_results['primary'],
+					'primary' : item['primary'],
 					'key' : key,
 					'rating' : merged_results['rating'],
 					'choices' : merged_results['choices'],
