@@ -111,8 +111,7 @@ def get_rating(entity):
     # ASSIGN THE ENDPOINT TO url
 
     query_param_dict = parse_qs(urlparse(request.url).query, keep_blank_values=True)
-
-    if 'consistency' in query_param_dict.keys() and query_param_dict['consistency'] == 'weak':
+    if 'consistency' in query_param_dict.keys() and query_param_dict['consistency'][0] == 'weak':
         shard_number = get_shard_number(entity, consistent=False)
     else:
         shard_number = get_shard_number(entity, consistent=True)
