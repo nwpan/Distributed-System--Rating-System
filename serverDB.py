@@ -64,13 +64,18 @@ def get_final_rating_result(key):
 	# calculate the average, create the choices list, and 
 	# create the clocks list AT THE SAME TIME!! Sick. Bro.	
 	for clockJsonString, rating in teaHash.iteritems():
-		rating = float(rating)
-		sum = sum + rating
+		
+		if rating != None:
+			rating = float(rating)
+			sum = sum + rating
 		choices.append(rating)
 		clockDict = json.loads(clockJsonString)
 		clocks.append(clockDict)
-	if sum == 0: average = 0 # or should it be none
-	else: average = sum/len(teaHash)
+	
+	if len(teaHash) != 0:
+		average = sum/len(teaHash)
+	else:
+		average = 0 # average is 0 when there is no entries
 
 	return {
 		"rating" : average,
@@ -201,24 +206,24 @@ def sync_with_neighbour_queue(key):
 	while item  != None:
 		if current_channel != item['primary']:
 
+			# make sure we get a list of dictionaries or a list of lists
 			if isinstance(item['clocks'], dict):
 				item['clocks'] = [item['clocks']]
+
+			if not isinstance(item['choices'], list):
+				item['choices'] = [item['choices']]
+		
+			# merge with the db			
+			for i in range(0, len(item['choices'])):
+				 merge_clock(item['choices'][i], item['clocks'][i], item['key']) 
 			
-			for clock in item['clocks']:
-				merged_results = merge_clock(item['rating'], clock, item['key'])
+			# pass the message around	
+			digest_list.append(item)
 				
-				digest_list.append({
-					'primary' : item['primary'],
-					'key' : key,
-					'rating' : merged_results['rating'],
-					'choices' : merged_results['choices'],
-					'clocks' : clock
-				})
-				
-				if len(digest_list) >= config['digest-length']:
-                			for row in digest_list:
-                        			queue.put(current_channel, row)
-                			digest_list = []
+			if len(digest_list) >= config['digest-length']:
+                		for row in digest_list:
+                        		queue.put(current_channel, row)
+                		digest_list = []
 		item = queue.get(neighbour_channel)	
 	return True
 
