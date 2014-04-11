@@ -273,8 +273,11 @@ def info(msg):
     sys.stdout.flush()
 
 def flush():
-    for client in clients:
-        client.flushall()
+    if len(db_servers) > 0:
+        # Only need to flush if DB servers have actually written to Redis
+        # Otherwise don't call---give Redis servers time to start up
+        for client in clients:
+            client.flushall()
 
 def restartServers(testName):
     stopServers()
@@ -387,12 +390,12 @@ def simpleEv(result):
     time = 1
     cv = VectorClock().update('c0', time)
     put(ITEM, rating, cv)
-    latestVal = 0
+    olderVal = 0
     for i in range(200):
         ecr, ecchoices, ecclocks = get(ITEM, ec=True)
-        if int(ecr) == 0: latestVal += 1
+        if int(ecr) == 0: olderVal += 1
     # Binomial critical value: 200 trials, 0.75 prob, 1% => 135 or more
-    result({'type': 'GE', 'got': latestVal, 'expected': 135})
+    result({'type': 'GE', 'got': olderVal, 'expected': 135})
     r, choices, clocks = get(ITEM)
     testResult(result, r, rating, choices, [rating], clocks, [cv])
 
