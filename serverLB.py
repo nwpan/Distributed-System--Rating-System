@@ -71,12 +71,13 @@ def put_rating(entity):
     if isinstance(rating, int): rating = float(rating)
     if not isinstance(rating, float): return abort(400)
 
-    if 'consistency' in query_param_dict.keys() and query_param_dict['consistency'] == 'weak':
-        shard_number = get_shard_number(entity)
-    else:
-        shard_number = get_shard_number(entity, consistent=True)
+    # WE ARE NOT SUPPOSE TO HAVE EVENTUAL CONSISTENT WRITES.  What does that even mean...
+    #if 'consistency' in query_param_dict.keys() and query_param_dict['consistency'] == 'weak':
+    #    shard_number = get_shard_number(entity)
+    #else:
+    #    shard_number = get_shard_number(entity, consistent=True)
 
-    dbBasePort = shard_number
+    dbBasePort = get_shard_number(entity, consistent=True)
 
     url = 'http://localhost:'+str(dbBasePort)+'/rating/'+entity
 
@@ -112,7 +113,7 @@ def get_rating(entity):
     query_param_dict = parse_qs(urlparse(request.url).query, keep_blank_values=True)
 
     if 'consistency' in query_param_dict.keys() and query_param_dict['consistency'] == 'weak':
-        shard_number = get_shard_number(entity)
+        shard_number = get_shard_number(entity, consistent=False)
     else:
         shard_number = get_shard_number(entity, consistent=True)
 
