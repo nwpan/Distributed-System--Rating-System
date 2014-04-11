@@ -273,8 +273,11 @@ def info(msg):
     sys.stdout.flush()
 
 def flush():
-    for client in clients:
-        client.flushall()
+    if len(db_servers) > 0:
+        # Only need to flush if DB servers have actually written to Redis
+        # Otherwise don't call---give Redis servers time to start up
+        for client in clients:
+            client.flushall()
 
 def restartServers(testName):
     stopServers()
