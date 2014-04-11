@@ -162,6 +162,23 @@ db_configs = [ {'id': i,
 dbTestConfigs = {} # Specialized db_configs for specific tests
 db_servers = []
 
+# Set up configs for special tests
+
+# digestLength1
+sp_configs = copy.deepcopy(db_configs)
+for config in sp_configs:
+    config['digest-length'] = 1
+dbTestConfigs['digestLength1'] = sp_configs
+
+# simpleOneDB
+sp_configs = copy.deepcopy(db_configs)
+for config in sp_configs:
+    config['ndb'] = 1
+    config['digest-length'] = 1
+dbTestConfigs['simpleOneDB'] = sp_configs
+
+
+
 def mkKey(entity):
     """ Return the Redis key for a given entity.  """
     return '/rating/'+entity
@@ -475,10 +492,6 @@ def digestLength1(result):
     """ Test gossip with digest length of 1.
         This will force every write to immediately be sent to the queue.
     """
-    configs = copy.deepcopy(db_configs)
-    for config in configs:
-        config['digest-length'] = 1
-    dbTestConfigs['digestLength1'] = configs
     gossipTest(result)
 
 @test()
@@ -487,11 +500,6 @@ def simpleOneDB(result):
         digest_length is set to 1 to force gossiping (which will do nothing,
         of course, because there is only one replica).
     """
-    configs = [copy.deepcopy(db_configs[0])]
-    configs[0]['ndb'] = 1
-    configs[0]['digest-length'] = 1
-    dbTestConfigs['simpleOneDB'] = configs
-
     # Read/Write/Read first entity
     r1  = 5
     time = 1

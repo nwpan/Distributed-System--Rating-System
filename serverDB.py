@@ -165,6 +165,7 @@ def merge_clock(rating, clock, key):
 	return final_rating_result 
 
 def merge_with_db(setrating, setclock, key):
+	global digest_list
 
 	# in a form of {rating, choices, clock}
 	final_rating_result = merge_clock(setrating, setclock, key)
@@ -182,6 +183,7 @@ def merge_with_db(setrating, setclock, key):
 	if len(digest_list) >= config['digest-length']:
 		for row in digest_list:
 			queue.put(current_channel, row)
+		digest_list = []
 	else:
 		return False
 	return True
@@ -189,7 +191,7 @@ def merge_with_db(setrating, setclock, key):
 # checks the our channel for any messages then sync with it, also
 # update the digest_list 
 def sync_with_neighbour_queue(key):
-	
+	global digest_list	
 	# According to Ted & Izaak, queue.get(neighbour_channel) automatically
 	# dequeues the item from queue once called. Note that this issue has been,
 	# raised multiple times, as noted by Izaak but he said to verify first.
@@ -201,16 +203,22 @@ def sync_with_neighbour_queue(key):
 
 			if isinstance(item['clocks'], dict):
 				item['clocks'] = [item['clocks']]
+			
 			for clock in item['clocks']:
 				merged_results = merge_clock(item['rating'], clock, item['key'])
-				db_instance = current_channel
+				
 				digest_list.append({
-					'primary' : db_instance,
+					'primary' : item['primary'],
 					'key' : key,
 					'rating' : merged_results['rating'],
 					'choices' : merged_results['choices'],
 					'clocks' : clock
-				})				 
+				})
+				
+				if len(digest_list) >= config['digest-length']:
+                			for row in digest_list:
+                        			queue.put(current_channel, row)
+                			digest_list = []
 		item = queue.get(neighbour_channel)	
 	return True
 
